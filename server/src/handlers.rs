@@ -1,6 +1,7 @@
 use crate::model::NewLog;
 use crate::{db, Server};
 use actix_web::{HttpResponse, Json, Query, State};
+use chrono::DateTime;
 use failure::Error;
 use log::debug;
 
@@ -33,8 +34,20 @@ pub fn handle_get_logs(
     server: State<Server>,
     range: Query<api::logs::get::Query>,
 ) -> Result<HttpResponse, Error> {
+    use chrono::{DateTime, Utc};
+
+    let conn = server.pool.get()?;
+    let logs = db::logs(&conn, range.from, range.until)?;
+    let logs = logs
+        .into_iter()
+        .map(|log| api::Log {
+            user_agent: log.user_agent,
+            response_time: log.response_time,
+            timestamp: DateTime::from_utc(log.timestamp, Utc),
+        })
+        .collect();
+
     debug!("{:?}", range);
-    let logs = Default::default();
     Ok(HttpResponse::Ok().json(api::logs::get::Response(logs)))
 }
 

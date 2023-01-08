@@ -1,6 +1,7 @@
-use crate::model::NewLog;
+use crate::model::{Log, NewLog};
 use crate::schema::logs::dsl;
-use diesel::{insert_into, PgConnection, QueryResult, RunQueryDsl};
+use chrono::{DateTime, Utc};
+use diesel::{insert_into, ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 
 pub fn insert_log(cn: &PgConnection, log: &NewLog) -> QueryResult<i64> {
     use crate::schema::logs::dsl;
@@ -18,4 +19,22 @@ pub fn insert_logs(cn: &PgConnection, logs: &[NewLog]) -> QueryResult<Vec<i64>> 
         .values(logs)
         .returning(dsl::id)
         .load(cn)
+}
+
+pub fn logs(
+    cn: &PgConnection,
+    from: Option<DateTime<Utc>>,
+    until: Option<DateTime<Utc>>,
+) -> QueryResult<Vec<Log>> {
+    use crate::schema::logs::dsl;
+
+    let mut query = dsl::logs.into_boxed();
+    if let Some(from) = from {
+        query = query.filter(dsl::timestamp.ge(from.naive_utc()))
+    }
+    if let Some(until) = until {
+        query = query.filter(dsl::timestamp.lt(until.naive_utc()))
+    }
+
+    query.order(dsl::timestamp.asc()).load(cn)
 }
