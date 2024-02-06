@@ -1,7 +1,9 @@
 use axum::{http::StatusCode, response::IntoResponse, routing::get, routing::post, Json, Router};
+use hyper::header::CONTENT_TYPE;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::net::SocketAddr;
+use tower_http::cors::{Any, CorsLayer, Origin};
 
 #[tokio::main]
 async fn main() {
@@ -23,6 +25,12 @@ fn create_app() -> Router {
     Router::new()
         .route("/", get(root))
         .route("/users", post(create_user))
+        .layer(
+            CorsLayer::new()
+                .allow_origin(Origin::exact("http://localhost:5173".parse().unwrap()))
+                .allow_methods(Any)
+                .allow_headers(vec![CONTENT_TYPE]),
+        )
 }
 
 async fn root() -> &'static str {
@@ -54,7 +62,7 @@ mod test {
     use super::*;
     use axum::{
         body::Body,
-        http::{header, Method, Request},
+        http::{Method, Request},
     };
     use tower::ServiceExt;
 
@@ -72,7 +80,7 @@ mod test {
         let req = Request::builder()
             .uri("/users")
             .method(Method::POST)
-            .header(header::CONTENT_TYPE, mime::APPLICATION_JSON.as_ref())
+            .header(CONTENT_TYPE, mime::APPLICATION_JSON.as_ref())
             .body(Body::from(r#"{ "username": "田中 太郎" }"#))
             .unwrap();
         let res = create_app().oneshot(req).await.unwrap();
