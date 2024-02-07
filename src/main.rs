@@ -26,6 +26,7 @@ async fn main() {
 fn create_app() -> Router {
     Router::new()
         .route("/", get(root))
+        .route("/flaky", get(flaky))
         .route("/users", post(create_user))
         .layer(
             CorsLayer::new()
@@ -36,9 +37,19 @@ fn create_app() -> Router {
 }
 
 async fn root() -> &'static str {
-    let delay = rand::thread_rng().gen_range(1..=15);
-    sleep(Duration::from_secs(delay)).await;
     "Hello, World!"
+}
+
+// This handler is flaky and will return a 500 Internal Server Error 50% of the time.
+async fn flaky() -> impl IntoResponse {
+    let delay = rand::thread_rng().gen_range(1..=7);
+    sleep(Duration::from_secs(delay)).await;
+
+    if rand::thread_rng().gen_bool(0.5) {
+        StatusCode::INTERNAL_SERVER_ERROR
+    } else {
+        StatusCode::OK
+    }
 }
 
 async fn create_user(Json(payload): Json<CreateUser>) -> impl IntoResponse {
