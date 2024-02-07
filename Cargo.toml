@@ -18,3 +18,4 @@ tracing-subscriber = { version = "0.3.8", features = ["env-filter"] }
 anyhow = "1.0.56"
 thiserror = "1.0.30"
 tower-http = { version = "0.2.5", features = ["cors"] }
+rand = "0.8.5"

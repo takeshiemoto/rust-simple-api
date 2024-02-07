@@ -1,8 +1,10 @@
 use axum::{http::StatusCode, response::IntoResponse, routing::get, routing::post, Json, Router};
 use hyper::header::CONTENT_TYPE;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::net::SocketAddr;
+use tokio::time::{sleep, Duration};
 use tower_http::cors::{Any, CorsLayer, Origin};
 
 #[tokio::main]
@@ -34,6 +36,8 @@ fn create_app() -> Router {
 }
 
 async fn root() -> &'static str {
+    let delay = rand::thread_rng().gen_range(1..=15);
+    sleep(Duration::from_secs(delay)).await;
     "Hello, World!"
 }
 
