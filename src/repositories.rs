@@ -1,7 +1,8 @@
+use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    sync::{Arc, RwLock},
+    sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 use thiserror::Error;
 
@@ -59,6 +60,55 @@ impl TodoRepositoryForMemory {
         TodoRepositoryForMemory {
             store: Arc::default(),
         }
+    }
+
+    // HashMapに対してスレッドセーフに書き込む
+    fn write_store_ref(&self) -> RwLockWriteGuard<TodoDates> {
+        self.store.write().unwrap()
+    }
+
+    // HashMapからスレッドセーフに読み込む
+    fn read_store_ref(&self) -> RwLockReadGuard<TodoDates> {
+        self.store.read().unwrap()
+    }
+
+    fn create(&self, payload: CreateTodo) -> Todo {
+        let mut store = self.write_store_ref();
+        let id = (store.len() + 1) as i32;
+        let todo = Todo::new(id, payload.text.clone());
+        todo
+    }
+
+    fn find(&self, id: i32) -> Option<Todo> {
+        let store = self.read_store_ref();
+        // 所有権を持っていないためCloseした値を返す
+        // Boxを返すことも可能
+        store.get(&id).map(|todo| todo.clone())
+    }
+
+    fn all(&self) -> Vec<Todo> {
+        let store = self.read_store_ref();
+        Vec::from_iter(store.values().map(|todo| todo.clone()))
+    }
+
+    fn update(&self, id: i32, payload: UpdateTodo) -> anyhow::Result<Todo> {
+        let mut store = self.write_store_ref();
+        let todo = store.get(&id).context(RepositoryError::NotFound(id))?;
+        let text = payload.text.unwrap_or(todo.text.clone());
+        let completed = payload.completed.unwrap_or(todo.completed);
+        let todo = Todo {
+            id,
+            text,
+            completed,
+        };
+        store.insert(id, todo.clone());
+        Ok(todo)
+    }
+
+    fn delete(&self, id: i32) -> anyhow::Result<()> {
+        let mut store = self.write_store_ref();
+        store.remove(&id).ok_or(RepositoryError::NotFound(id))?;
+        Ok(())
     }
 }
 
