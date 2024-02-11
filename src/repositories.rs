@@ -81,6 +81,7 @@ impl TodoRepositoryForMemory {
         let mut store = self.write_store_ref();
         let id = (store.len() + 1) as i32;
         let todo = Todo::new(id, payload.text.clone());
+        store.insert(id, todo.clone());
         todo
     }
 
