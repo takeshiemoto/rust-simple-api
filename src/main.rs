@@ -1,7 +1,7 @@
 mod handlers;
 mod repositories;
 
-use crate::handlers::{create_todo, flaky, root};
+use crate::handlers::{all_todos, create_todo, delete_todo, find_todo, flaky, root, update_todo};
 use crate::repositories::{TodoRepository, TodoRepositoryForMemory};
 use axum::{extract::Extension, routing::get, routing::post, Router};
 use hyper::header::CONTENT_TYPE;
@@ -30,6 +30,14 @@ async fn main() {
 fn create_app<T: TodoRepository>(repository: T) -> Router {
     Router::new()
         .route("/", get(root))
+        .route("/todos", post(create_todo::<T>))
+        .route("/todos", post(create_todo::<T>).get(all_todos::<T>))
+        .route(
+            "/todos/:id",
+            get(find_todo::<T>)
+                .delete(delete_todo::<T>)
+                .patch(update_todo::<T>),
+        )
         .route("/flaky", get(flaky))
         .route("/todos", post(create_todo::<T>))
         .layer(Extension(Arc::new(repository)))
