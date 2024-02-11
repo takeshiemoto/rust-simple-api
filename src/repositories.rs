@@ -12,6 +12,11 @@ enum RepositoryError {
     NotFound(i32),
 }
 
+// TodoRepositoryトレイトを実装する型が、Clone、Send、Syncトレイトを実装していること
+// Cloneトレイとは型の値を複製する機能を提供することを示す
+// Sendトレイトは、型の値がスレッド間で安全に送信できることを示す
+// Syncトレイトは、型の値が複数のスレッドから参照されることが安全であることを示す
+// 'staticライフタイムは、型がプログラムの実行期間中ずっと有効であることを示す
 pub trait TodoRepository: Clone + Send + Sync + 'static {
     fn create(&self, payload: CreateTodo) -> Todo;
     fn find(&self, id: i32) -> Option<Todo>;
