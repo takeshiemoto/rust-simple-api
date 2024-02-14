@@ -1,12 +1,42 @@
 use crate::repositories::{CreateTodo, TodoRepository, UpdateTodo};
-use axum::extract::{Extension, Path};
+use axum::extract::{Extension, FromRequest, Path, RequestParts};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::Json;
+use axum::{async_trait, BoxError, Json};
 use rand::Rng;
+use serde::de::DeserializeOwned;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
+use validator::Validate;
+
+#[derive(Debug)]
+pub struct ValidateJson<T>(T);
+
+#[async_trait]
+impl<T, B> FromRequest<B> for ValidateJson<T>
+where
+    T: DeserializeOwned + Validate,
+    B: http_body::Body + Send,
+    B::Data: Send,
+    B::Error: Into<BoxError>,
+{
+    type Rejection = (StatusCode, String);
+
+    async fn from_request(req: &mut RequestParts<B>) -> Result<Self, Self::Rejection> {
+        let Json(value) = Json::<T>::from_request(req).await.map_err(|rejection| {
+            let message = format!("Json parse error: [{}]", rejection);
+            (StatusCode::BAD_REQUEST, message)
+        })?;
+
+        value.validate().map_err(|rejection| {
+            let message = format!("Validation error: [{}]", rejection).replace('\n', ",");
+            (StatusCode::BAD_REQUEST, message)
+        })?;
+
+        Ok(ValidateJson(value))
+    }
+}
 
 // Extension抽出器
 // アプリケーションの状態や依存関係をハンドラに注入するために使用されます。
@@ -14,7 +44,7 @@ use tokio::time::sleep;
 // create_todoでは、Extension<Arc<T>>を使用して、TodoRepositoryのインスタンスをハンドラに注入しています。
 // Json(payload)では、リクエストボディをデシリアライズしてCreateTodo型に変換しています。
 pub async fn create_todo<T: TodoRepository>(
-    Json(payload): Json<CreateTodo>,
+    ValidateJson(payload): ValidateJson<CreateTodo>,
     Extension(repository): Extension<Arc<T>>,
 ) -> impl IntoResponse {
     let todo = repository.create(payload);
@@ -39,7 +69,7 @@ pub async fn all_todos<T: TodoRepository>(
 
 pub async fn update_todo<T: TodoRepository>(
     Path(id): Path<i32>,
-    Json(payload): Json<UpdateTodo>,
+    ValidateJson(payload): ValidateJson<UpdateTodo>,
     Extension(repository): Extension<Arc<T>>,
 ) -> Result<impl IntoResponse, StatusCode> {
     let todo = repository
