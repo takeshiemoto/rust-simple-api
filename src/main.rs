@@ -141,7 +141,7 @@ mod test {
             r#"{
         "id": 1,
         "text": "should_update_todos",
-        "completed: false 
+        "completed": false 
         }"#
             .to_string(),
         );

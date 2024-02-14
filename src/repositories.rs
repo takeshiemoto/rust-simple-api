@@ -83,7 +83,9 @@ impl TodoRepositoryForMemory {
     fn read_store_ref(&self) -> RwLockReadGuard<TodoDates> {
         self.store.read().unwrap()
     }
+}
 
+impl TodoRepository for TodoRepositoryForMemory {
     fn create(&self, payload: CreateTodo) -> Todo {
         let mut store = self.write_store_ref();
         let id = (store.len() + 1) as i32;
@@ -122,28 +124,6 @@ impl TodoRepositoryForMemory {
         let mut store = self.write_store_ref();
         store.remove(&id).ok_or(RepositoryError::NotFound(id))?;
         Ok(())
-    }
-}
-
-impl TodoRepository for TodoRepositoryForMemory {
-    fn create(&self, payload: CreateTodo) -> Todo {
-        todo!()
-    }
-
-    fn find(&self, id: i32) -> Option<Todo> {
-        todo!()
-    }
-
-    fn all(&self) -> Vec<Todo> {
-        todo!()
-    }
-
-    fn update(&self, id: i32, payload: UpdateTodo) -> anyhow::Result<Todo> {
-        todo!()
-    }
-
-    fn delete(&self, id: i32) -> anyhow::Result<()> {
-        todo!()
     }
 }
 

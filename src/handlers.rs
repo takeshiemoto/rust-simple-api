@@ -1,4 +1,4 @@
-use crate::repositories::{CreateTodo, TodoRepository};
+use crate::repositories::{CreateTodo, TodoRepository, UpdateTodo};
 use axum::extract::{Extension, Path};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -25,31 +25,37 @@ pub async fn find_todo<T: TodoRepository>(
     Path(id): Path<i32>,
     Extension(repository): Extension<Arc<T>>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    Ok(StatusCode::OK)
+    // ok_orはOptionをErrに変換して?で即時返却している
+    let todo = repository.find(id).ok_or(StatusCode::NOT_FOUND)?;
+    Ok((StatusCode::OK, Json(todo)))
 }
 
 pub async fn all_todos<T: TodoRepository>(
     Extension(repository): Extension<Arc<T>>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    todo!();
-    Ok(StatusCode::OK)
+    let todo = repository.all();
+    Ok((StatusCode::OK, Json(todo)))
 }
 
 pub async fn update_todo<T: TodoRepository>(
     Path(id): Path<i32>,
-    Json(payload): Json<CreateTodo>,
+    Json(payload): Json<UpdateTodo>,
     Extension(repository): Extension<Arc<T>>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    todo!();
-    Ok(StatusCode::OK)
+    let todo = repository
+        .update(id, payload)
+        .or(Err(StatusCode::NOT_FOUND))?;
+    Ok((StatusCode::OK, Json(todo)))
 }
 
 pub async fn delete_todo<T: TodoRepository>(
     Path(id): Path<i32>,
     Extension(repository): Extension<Arc<T>>,
-) -> Result<impl IntoResponse, StatusCode> {
-    todo!();
-    Ok(StatusCode::OK)
+) -> StatusCode {
+    repository
+        .delete(id)
+        .map(|_| StatusCode::NO_CONTENT)
+        .unwrap_or(StatusCode::NOT_FOUND)
 }
 
 pub async fn root() -> &'static str {
