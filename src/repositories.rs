@@ -165,7 +165,7 @@ mod test {
                     completed: Some(true),
                 },
             )
-            .expect("faild update todo.");
+            .expect("failed update todo.");
         assert_eq!(
             Todo {
                 id,
