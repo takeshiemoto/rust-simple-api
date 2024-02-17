@@ -106,14 +106,14 @@ impl TodoRepository for TodoRepositoryForMemory {
         let store = self.read_store_ref();
         let todo = store
             .get(&id)
-            .map(|todo| todo.clone())
+            .cloned()
             .ok_or(RepositoryError::NotFound(id))?;
         Ok(todo)
     }
 
     async fn all(&self) -> anyhow::Result<Vec<Todo>> {
         let store = self.read_store_ref();
-        Ok(Vec::from_iter(store.values().map(|todo| todo.clone())))
+        Ok(Vec::from_iter(store.values().cloned()))
     }
 
     async fn update(&self, id: i32, payload: UpdateTodo) -> anyhow::Result<Todo> {
