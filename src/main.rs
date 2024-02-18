@@ -2,9 +2,11 @@ mod handlers;
 mod repositories;
 
 use crate::handlers::{all_todos, create_todo, delete_todo, find_todo, flaky, root, update_todo};
-use crate::repositories::{TodoRepository, TodoRepositoryForMemory};
+use crate::repositories::{TodoRepository, TodoRepositoryForDb};
 use axum::{extract::Extension, routing::get, routing::post, Router};
+use dotenv::dotenv;
 use hyper::header::CONTENT_TYPE;
+use sqlx::PgPool;
 use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -15,8 +17,18 @@ async fn main() {
     let log_level = env::var("RUST_LOG").unwrap_or("info".to_string());
     env::set_var("RUST_LOG", log_level);
     tracing_subscriber::fmt::init();
+    dotenv().ok();
 
-    let repository = TodoRepositoryForMemory::new();
+    let database_url = &env::var("DATABASE_URL").expect("undefined [DATABASE_URL]");
+
+    tracing::debug!("start connect database...");
+
+    let pool = PgPool::connect(database_url)
+        .await
+        .expect(&format!("fail conect database ,url is [{}]", database_url));
+
+    let repository = TodoRepositoryForDb::new(pool.clone());
+
     let app = create_app(repository);
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     tracing::debug!("listening on {}", addr);
@@ -50,7 +62,8 @@ fn create_app<T: TodoRepository>(repository: T) -> Router {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::repositories::{CreateTodo, Todo, TodoRepositoryForMemory};
+    use crate::repositories::test_utils::TodoRepositoryForMemory;
+    use crate::repositories::{CreateTodo, Todo};
     use axum::http::{header, Method, StatusCode};
     use axum::response::Response;
     use axum::{body::Body, http::Request};
