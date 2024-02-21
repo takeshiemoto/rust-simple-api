@@ -1,8 +1,10 @@
 mod handlers;
 mod repositories;
 
-use crate::handlers::{all_todos, create_todo, delete_todo, find_todo, flaky, root, update_todo};
-use crate::repositories::{TodoRepository, TodoRepositoryForDb};
+use crate::handlers::todo::{
+    all_todos, create_todo, delete_todo, find_todo, flaky, root, update_todo,
+};
+use crate::repositories::todo::{TodoRepository, TodoRepositoryForDb};
 use axum::{extract::Extension, routing::get, routing::post, Router};
 use dotenv::dotenv;
 use hyper::header::CONTENT_TYPE;
@@ -25,7 +27,7 @@ async fn main() {
 
     let pool = PgPool::connect(database_url)
         .await
-        .expect(&format!("fail conect database ,url is [{}]", database_url));
+        .unwrap_or_else(|_| panic!("fail conect database ,url is [{}]", database_url));
 
     let repository = TodoRepositoryForDb::new(pool.clone());
 
@@ -62,9 +64,9 @@ fn create_app<T: TodoRepository>(repository: T) -> Router {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::repositories::test_utils::TodoRepositoryForMemory;
-    use crate::repositories::{CreateTodo, Todo};
-    use axum::http::{header, Method, StatusCode};
+    use crate::repositories::todo::test_utils::TodoRepositoryForMemory;
+    use crate::repositories::todo::{CreateTodo, Todo};
+    use axum::http::{Method, StatusCode};
     use axum::response::Response;
     use axum::{body::Body, http::Request};
     use tower::ServiceExt;
@@ -98,7 +100,7 @@ mod test {
         Request::builder()
             .uri(path)
             .method(method)
-            .header(header::CONTENT_TYPE, mime::APPLICATION_JSON.as_ref())
+            .header(CONTENT_TYPE, mime::APPLICATION_JSON.as_ref())
             .body(Body::from(json_body))
             .unwrap()
     }
