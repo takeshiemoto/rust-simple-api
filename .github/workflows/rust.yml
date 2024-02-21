@@ -1,4 +1,4 @@
-name: Rust
+name: Rust CI
 
 on:
   push:
@@ -14,6 +14,23 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Build
+        run: cargo build --verbose
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+
     services:
       postgres:
         image: postgres:13-alpine
@@ -23,7 +40,6 @@ jobs:
           POSTGRES_DB: test_database
         ports:
           - 5432:5432
-        # サービスコンテナが起動するのを待つためのオプション
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -33,7 +49,6 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      # Rust toolchainのセットアップ
       - name: Setup Rust
         uses: actions-rs/toolchain@v1
         with:
@@ -41,22 +56,14 @@ jobs:
           toolchain: stable
           override: true
 
-      # sqlx-cliのインストール
       - name: Install sqlx CLI
         run: cargo install sqlx-cli --no-default-features --features postgres
 
-      # データベースの作成
       - name: Create Database
         run: sqlx db create
 
-      # データベースマイグレーション
       - name: Migrate Database
         run: sqlx migrate run
 
-      # ビルド
-      - name: Build
-        run: cargo build --verbose
-
-      # テストの実行
       - name: Run tests
-        run: cargo test --verbose
+        run: cargo test --no-default-features --verbose
