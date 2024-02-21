@@ -2,16 +2,8 @@ use axum::async_trait;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgPool};
 
-use thiserror::Error;
+use crate::repositories::RepositoryError;
 use validator::Validate;
-
-#[derive(Debug, Error)]
-enum RepositoryError {
-    #[error("Unexpected Error: [{0}]")]
-    Unexpected(String),
-    #[error("NotFound, id is {0}")]
-    NotFound(i32),
-}
 
 // TodoRepositoryトレイトを実装する型が、Clone、Send、Syncトレイトを実装していること
 // Cloneトレイとは型の値を複製する機能を提供することを示す
@@ -202,6 +194,7 @@ mod test {
 #[cfg(test)]
 pub mod test_utils {
     use super::*;
+    use crate::repositories::RepositoryError;
     use anyhow::Context;
     use std::collections::HashMap;
     use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
