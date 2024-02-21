@@ -123,6 +123,83 @@ impl TodoRepository for TodoRepositoryForDb {
 }
 
 #[cfg(test)]
+mod test {
+    use super::*;
+    use dotenv::dotenv;
+    use sqlx::PgPool;
+    use std::env;
+
+    #[tokio::test]
+    async fn crud_scenario() {
+        dotenv().ok();
+
+        let database_url = &env::var("DATABASE_URL").expect("undefined [DATABASE_URL]");
+        let pool = PgPool::connect(database_url)
+            .await
+            .unwrap_or_else(|_| panic!("fail connect database, url is [{}]", database_url));
+
+        let repository = TodoRepositoryForDb::new(pool.clone());
+        let todo_text = "[crud_scenario] text";
+
+        // create
+        let created = repository
+            .create(CreateTodo::new(todo_text.to_string()))
+            .await
+            .expect("[create] returned Err");
+
+        assert_eq!(created.text, todo_text);
+        assert!(!created.completed);
+
+        // find
+        let todo = repository
+            .find(created.id)
+            .await
+            .expect("[find] returned Err");
+
+        assert_eq!(created, todo);
+
+        // all
+        let todos = repository.all().await.expect("[all] returned Err");
+        let todo = todos.first().unwrap();
+
+        assert_eq!(created, *todo);
+
+        // update
+        let updated_text = "[crud_scenario] updated text";
+        let todo = repository
+            .update(
+                todo.id,
+                UpdateTodo {
+                    text: Some(updated_text.to_string()),
+                    completed: Some(true),
+                },
+            )
+            .await
+            .expect("[update] returned Err");
+
+        assert_eq!(created.id, todo.id);
+        assert_eq!(todo.text, updated_text);
+
+        // delete
+        repository
+            .delete(todo.id)
+            .await
+            .expect("[delete] returned Err");
+        let res = repository.find(created.id).await;
+
+        assert!(res.is_err());
+
+        let todo_rows = sqlx::query(r#"SELECT * FROM todos WHERE id=$1"#)
+            .bind(todo.id)
+            .fetch_all(&pool)
+            .await
+            .expect("[delete] todo_labels fetch error");
+
+        assert_eq!(todo_rows.len(), 0)
+    }
+}
+
+#[cfg(test)]
 pub mod test_utils {
     use super::*;
     use crate::repositories::CreateTodo;
@@ -215,59 +292,5 @@ pub mod test_utils {
             store.remove(&id).ok_or(RepositoryError::NotFound(id))?;
             Ok(())
         }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use crate::repositories::test_utils::TodoRepositoryForMemory;
-
-    #[tokio::test]
-    async fn todo_crud_scenario() {
-        let text = "todo text".to_string();
-        let id = 1;
-        let expected = Todo::new(id, text.clone());
-
-        // create
-        let repository = TodoRepositoryForMemory::new();
-        let todo = repository
-            .create(CreateTodo { text })
-            .await
-            .expect("failed create todo");
-        assert_eq!(expected, todo);
-
-        // find
-        let todo = repository.find(todo.id).await.unwrap();
-        assert_eq!(expected, todo);
-
-        // all
-        let todo = repository.all().await.expect("failed get all todo");
-        assert_eq!(vec![expected], todo);
-
-        // update
-        let text = "update todo text".to_string();
-        let todo = repository
-            .update(
-                1,
-                UpdateTodo {
-                    text: Some(text.clone()),
-                    completed: Some(true),
-                },
-            )
-            .await
-            .expect("failed update todo.");
-        assert_eq!(
-            Todo {
-                id,
-                text,
-                completed: true
-            },
-            todo
-        );
-
-        // delete
-        let res = repository.delete(id).await;
-        assert!(res.is_ok())
     }
 }
