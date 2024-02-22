@@ -1,3 +1,4 @@
+use crate::repositories::RepositoryError;
 use axum::async_trait;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgPool};
@@ -35,7 +36,21 @@ impl LabelRepositoryForDb {
 #[async_trait]
 impl LabelRepository for LabelRepositoryForDb {
     async fn create(&self, name: String) -> anyhow::Result<Label> {
-        todo!()
+        let optional_label = sqlx::query_as::<_, Label>(r#"SELECT * FROM labels WHERE name = $1"#)
+            .bind(name.clone())
+            .fetch_optional(&self.pool)
+            .await?;
+        if let Some(label) = optional_label {
+            return Err(RepositoryError::Duplicate(label.id).into());
+        }
+
+        let label =
+            sqlx::query_as::<_, Label>(r#"INSERT INTO labels (name) VALUES ($1) RETURNING *"#)
+                .bind(name.clone())
+                .fetch_one(&self.pool)
+                .await?;
+
+        Ok(label)
     }
 
     async fn all(&self) -> anyhow::Result<Vec<Label>> {
