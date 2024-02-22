@@ -40,6 +40,7 @@ impl LabelRepository for LabelRepositoryForDb {
             .bind(name.clone())
             .fetch_optional(&self.pool)
             .await?;
+
         if let Some(label) = optional_label {
             return Err(RepositoryError::Duplicate(label.id).into());
         }
@@ -54,11 +55,24 @@ impl LabelRepository for LabelRepositoryForDb {
     }
 
     async fn all(&self) -> anyhow::Result<Vec<Label>> {
-        todo!()
+        let labels =
+            sqlx::query_as::<_, Label>(r#"SELECT * FROM labels ORDER BY labels.id ASC"#)
+                .fetch_all(&self.pool)
+                .await?;
+
+        Ok(labels)
     }
 
     async fn delete(&self, id: i32) -> anyhow::Result<()> {
-        todo!()
+        sqlx::query(r#"DELETE FROM labels WHERE id=$1"#)
+            .bind(id)
+            .execute(&self.pool)
+            .await.map_err(|e| match e {
+            sqlx::Error::RowNotFound => RepositoryError::NotFound(id),
+            _ => RepositoryError::Unexpected(e.to_string())
+        })?;
+
+        Ok(())
     }
 }
 
