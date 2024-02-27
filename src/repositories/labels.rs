@@ -55,10 +55,9 @@ impl LabelRepository for LabelRepositoryForDb {
     }
 
     async fn all(&self) -> anyhow::Result<Vec<Label>> {
-        let labels =
-            sqlx::query_as::<_, Label>(r#"SELECT * FROM labels ORDER BY labels.id ASC"#)
-                .fetch_all(&self.pool)
-                .await?;
+        let labels = sqlx::query_as::<_, Label>(r#"SELECT * FROM labels ORDER BY labels.id ASC"#)
+            .fetch_all(&self.pool)
+            .await?;
 
         Ok(labels)
     }
@@ -67,10 +66,11 @@ impl LabelRepository for LabelRepositoryForDb {
         sqlx::query(r#"DELETE FROM labels WHERE id=$1"#)
             .bind(id)
             .execute(&self.pool)
-            .await.map_err(|e| match e {
-            sqlx::Error::RowNotFound => RepositoryError::NotFound(id),
-            _ => RepositoryError::Unexpected(e.to_string())
-        })?;
+            .await
+            .map_err(|e| match e {
+                sqlx::Error::RowNotFound => RepositoryError::NotFound(id),
+                _ => RepositoryError::Unexpected(e.to_string()),
+            })?;
 
         Ok(())
     }
@@ -115,5 +115,86 @@ mod test {
             .delete(label.id)
             .await
             .expect("[delete] returned Err");
+    }
+}
+
+#[cfg(test)]
+pub mod test_utils {
+    use super::{Label, LabelRepository};
+    use axum::async_trait;
+    use std::collections::HashMap;
+    use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
+
+    impl Label {
+        pub fn new(id: i32, name: String) -> Self {
+            Label { id, name }
+        }
+    }
+
+    type LabelData = HashMap<i32, Label>;
+
+    #[derive(Debug, Clone)]
+    pub struct LabelRepositoryForMemory {
+        store: Arc<RwLock<LabelData>>,
+    }
+
+    impl LabelRepositoryForMemory {
+        pub fn new() -> Self {
+            LabelRepositoryForMemory {
+                store: Arc::default(),
+            }
+        }
+
+        // HashMapに対してスレッドセーフに書き込む
+        fn write_store_ref(&self) -> RwLockWriteGuard<LabelData> {
+            self.store.write().unwrap()
+        }
+
+        // HashMapからスレッドセーフに読み込む
+        fn read_store_ref(&self) -> RwLockReadGuard<LabelData> {
+            self.store.read().unwrap()
+        }
+    }
+
+    #[async_trait]
+    impl LabelRepository for LabelRepositoryForMemory {
+        async fn create(&self, name: String) -> anyhow::Result<Label> {
+            todo!()
+        }
+
+        async fn all(&self) -> anyhow::Result<Vec<Label>> {
+            todo!()
+        }
+
+        async fn delete(&self, id: i32) -> anyhow::Result<()> {
+            todo!()
+        }
+    }
+
+    mod test {
+        use crate::repositories::labels::test_utils::LabelRepositoryForMemory;
+        use crate::repositories::labels::{Label, LabelRepository};
+
+        async fn label_curd_scenario() {
+            let text = "label text".to_string();
+            let id = 1;
+            let expected = Label::new(id, text.clone());
+
+            // create
+            let repository = LabelRepositoryForMemory::new();
+            let label = repository
+                .create(text.clone())
+                .await
+                .expect("failed label create");
+            assert_eq!(expected, label);
+
+            // all
+            let label = repository.all().await.unwrap();
+            assert_eq!(vec![expected], label);
+
+            // delete
+            let res = repository.delete(id).await;
+            assert!(res.is_ok())
+        }
     }
 }

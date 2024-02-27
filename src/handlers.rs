@@ -1,9 +1,10 @@
-use axum::{async_trait, BoxError, Json};
 use axum::extract::{FromRequest, RequestParts};
 use axum::http::StatusCode;
+use axum::{async_trait, BoxError, Json};
 use serde::de::DeserializeOwned;
 use validator::Validate;
 
+pub mod label;
 pub mod todo;
 
 // ジェネリック型 `T` をラップするタプル構造体。
@@ -14,17 +15,17 @@ pub struct ValidateJson<T>(T);
 // この実装は、HTTP リクエストから `ValidateJson<T>` インスタンスを生成する方法を提供。
 #[async_trait]
 impl<T, B> FromRequest<B> for ValidateJson<T>
-    where
+where
     // `T` は `DeserializeOwned` と `Validate` トレイトを実装する必要がある。
     // これは、`T` がデシリアライズ可能で、かつバリデーションができることを意味する。
-        T: DeserializeOwned + Validate,
+    T: DeserializeOwned + Validate,
     // `B` は HTTP ボディを表す型で、`Send` トレイトを実装している必要がある。
     // これにより、`B` 型の値がスレッド間で安全に送信できることが保証される。
-        B: http_body::Body + Send,
+    B: http_body::Body + Send,
     // `B::Data` と `B::Error` も `Send` トレイトを実装する必要がある。
     // これにより、ボディのデータやエラーもスレッド間で安全に送信できる。
-        B::Data: Send,
-        B::Error: Into<BoxError>,
+    B::Data: Send,
+    B::Error: Into<BoxError>,
 {
     // リクエストからの変換が失敗した場合に返されるエラーの型を定義。
     type Rejection = (StatusCode, String);

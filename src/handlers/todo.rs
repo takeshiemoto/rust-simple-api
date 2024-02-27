@@ -1,14 +1,13 @@
+use crate::handlers::ValidateJson;
 use crate::repositories::todo::{CreateTodo, TodoRepository, UpdateTodo};
 use axum::extract::{Extension, Path};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::{Json};
+use axum::Json;
 use rand::Rng;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
-use crate::handlers::ValidateJson;
-
 
 // Extension抽出器
 // アプリケーションの状態や依存関係をハンドラに注入するために使用されます。

@@ -110,10 +110,10 @@ impl TodoRepository for TodoRepositoryForDb {
                 _ => RepositoryError::Unexpected(e.to_string()),
             })?;
 
-        Ok({})
+        Ok(())
     }
 }
-
+#[cfg(test)]
 #[cfg(feature = "database-test")]
 mod test {
     use super::*;
