@@ -25,8 +25,8 @@ pub struct TodoWithLabelFromRow {
     id: i32,
     text: String,
     completed: bool,
-    // label_id: Option<i32>,
-    // label_name: Option<String>
+    label_id: Option<i32>,
+    label_name: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, FromRow)]
@@ -39,23 +39,36 @@ pub struct TodoEntity {
 
 // `TodoWithLabelFromRow`型のベクターを引数として受け取り、`TodoEntity`型のベクターを返す関数
 fn fold_entities(rows: Vec<TodoWithLabelFromRow>) -> Vec<TodoEntity> {
-    // `rows`ベクターをイテレートし、`fold`メソッドを使って変換処理を行う
-    rows.iter()
-        .fold(vec![], |mut accum: Vec<TodoEntity>, current| {
-            // 現在の`TodoWithLabelFromRow`オブジェクトから`TodoEntity`オブジェクトを作成し、`accum`ベクターに追加する
-            accum.push(TodoEntity {
-                id: current.id,
-                // 現在の要素のテキストをクローン（ディープコピー）
-                // cloneメソッドを使用する主な理由は、データの所有権を新しいデータ構造に移動させるか、またはデータの複製を作成する必要がある場合
-                // String型のtextフィールドが所有権を持つデータ型であるためcloneが必要
-                // fold_entities関数内でcurrent.textをTodoEntityのtextフィールドに直接割り当てようとすると
-                // currentがrows.iter()によって借用されているため、所有権の移動が発生し、コンパイルエラーになります。
-                text: current.text.clone(),
-                completed: current.completed,
-                labels: vec![],
-            });
-            accum
+    let mut rows = rows.iter();
+    let mut accum: Vec<TodoEntity> = vec![];
+    'outer: while let Some(row) = rows.next() {
+        let mut todos = accum.iter_mut();
+        while let Some(todo) = todos.next() {
+            if todo.id == row.id {
+                todo.labels.push(Label {
+                    id: row.label_id.unwrap(),
+                    name: row.label_name.clone().unwrap(),
+                });
+                continue 'outer;
+            }
+        }
+        let labels = if row.label_id.is_some() {
+            vec![Label {
+                id: row.label_id.unwrap(),
+                name: row.label_name.clone().unwrap(),
+            }]
+        } else {
+            vec![]
+        };
+
+        accum.push(TodoEntity {
+            id: row.id,
+            text: row.text.clone(),
+            completed: row.completed,
+            labels,
         })
+    }
+    accum
 }
 
 fn fold_entity(row: TodoWithLabelFromRow) -> TodoEntity {
@@ -161,6 +174,59 @@ mod test {
     use dotenv::dotenv;
     use sqlx::PgPool;
     use std::env;
+
+    #[test]
+    fn fold_entities_test() {
+        let label_1 = Label {
+            id: 1,
+            name: String::from("label 1"),
+        };
+        let label_2 = Label {
+            id: 2,
+            name: String::from("label 2"),
+        };
+
+        let rows = vec![
+            TodoWithLabelFromRow {
+                id: 1,
+                text: String::from("todo 1"),
+                completed: false,
+                label_id: Some(label_1.id),
+                label_name: Some(label_1.name.clone()),
+            },
+            TodoWithLabelFromRow {
+                id: 1,
+                text: String::from("todo 1"),
+                completed: false,
+                label_id: Some(label_2.id),
+                label_name: Some(label_2.name.clone()),
+            },
+            TodoWithLabelFromRow {
+                id: 2,
+                text: String::from("todo 2"),
+                completed: false,
+                label_id: Some(label_1.id),
+                label_name: Some(label_1.name.clone()),
+            },
+        ];
+        assert_eq!(
+            fold_entities(rows),
+            vec![
+                TodoEntity {
+                    id: 1,
+                    text: String::from("todo 1"),
+                    completed: false,
+                    labels: vec![label_1.clone(), label_2.clone()]
+                },
+                TodoEntity {
+                    id: 2,
+                    text: String::from("todo 2"),
+                    completed: false,
+                    labels: vec![label_1.clone()]
+                }
+            ]
+        )
+    }
 
     #[tokio::test]
     async fn crud_scenario() {
