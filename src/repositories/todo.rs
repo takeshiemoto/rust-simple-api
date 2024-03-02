@@ -83,6 +83,7 @@ pub struct CreateTodo {
     #[validate(length(min = 1, message = "Can not be empty"))]
     #[validate(length(max = 100, message = "Over test length"))]
     text: String,
+    labels: Vec<i32>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Validate)]
@@ -237,12 +238,30 @@ mod test {
             .await
             .unwrap_or_else(|_| panic!("fail connect database, url is [{}]", database_url));
 
+        let label_name = String::from("test label");
+        let optional_label = sqlx::query_as::<_, Label>(r#"select * from labels where name = $1"#)
+            .bind(label_name.clone())
+            .fetch_optional(&pool)
+            .await
+            .expect("Failed to prepare label data.");
+        let label_1 = if let Some(label) = optional_label {
+            label
+        } else {
+            let label = sqlx::query_as::<_, Label>(
+                r#"insert into labels ( name ) values ( $1 ) returning *"#,
+            )
+            .bind(label_name)
+            .fetch_one(&pool)
+            .await
+            .expect("Failed to insert label data.");
+            label
+        };
         let repository = TodoRepositoryForDb::new(pool.clone());
         let todo_text = "[crud_scenario] text";
 
         // create
         let created = repository
-            .create(CreateTodo::new(todo_text.to_string()))
+            .create(CreateTodo::new(todo_text.to_string(), vec![label_1.id]))
             .await
             .expect("[create] returned Err");
 
@@ -309,8 +328,8 @@ pub mod test_utils {
 
     #[cfg(test)]
     impl CreateTodo {
-        pub fn new(text: String) -> Self {
-            Self { text }
+        pub fn new(text: String, labels: Vec<i32>) -> Self {
+            Self { text, labels }
         }
     }
 
@@ -408,6 +427,77 @@ pub mod test_utils {
             let mut store = self.write_store_ref();
             store.remove(&id).ok_or(RepositoryError::NotFound(id))?;
             Ok(())
+        }
+    }
+
+    #[cfg(test)]
+    mod test {
+        use super::*;
+
+        #[tokio::test]
+        async fn todo_crud_scenario() {
+            let text = "todo text".to_string();
+            let id = 1;
+            let label_data = Label {
+                id: 1,
+                name: String::from("test label"),
+            };
+            let labels = vec![label_data.clone()];
+            let expected = TodoEntity {
+                id,
+                text: text.clone(),
+                completed: false,
+                labels,
+            };
+
+            // create
+            let label_data = Label {
+                id: 1,
+                name: String::from("test label"),
+            };
+            let labels = vec![label_data.clone()];
+            let repository = TodoRepositoryForMemory::new(labels.clone());
+            let todo = repository
+                .create(CreateTodo::new(text, vec![label_data.id]))
+                .await
+                .expect("failed create todo");
+            assert_eq!(expected, todo);
+
+            // find
+            let todo = repository.find(todo.id).await.unwrap();
+            assert_eq!(expected, todo);
+
+            // all
+            let todo = repository.all().await.expect("failed get all todo");
+            assert_eq!(vec![expected], todo);
+
+            // update
+            let text = "update todo text".to_string();
+            let todo = repository
+                .update(
+                    1,
+                    UpdateTodo {
+                        text: Some(text.clone()),
+                        completed: Some(true),
+                        labels: Some(vec![]),
+                    },
+                )
+                .await
+                .expect("failed update todo.");
+
+            assert_eq!(
+                TodoEntity {
+                    id,
+                    text,
+                    completed: true,
+                    labels: vec![]
+                },
+                todo
+            );
+
+            // delete
+            let res = repository.delete(id).await;
+            assert!(res.is_ok())
         }
     }
 }
