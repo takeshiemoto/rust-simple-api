@@ -151,8 +151,10 @@ mod test {
         let todo_repository = TodoRepositoryForMemory::new(vec![]);
         let label_repository = LabelRepositoryForMemory::new();
 
+        todo!("labelデータの追加");
+        let labels = vec![];
         todo_repository
-            .create(CreateTodo::new("Should_find_todo".to_string()))
+            .create(CreateTodo::new("Should_find_todo".to_string(), labels))
             .await
             .expect("failed create todo");
         let req = build_todo_req_with_empty(Method::GET, "/todos/1");
@@ -171,8 +173,10 @@ mod test {
         let todo_repository = TodoRepositoryForMemory::new(vec![]);
         let label_repository = LabelRepositoryForMemory::new();
 
+        todo!("labelデータの追加");
+        let labels = vec![];
         todo_repository
-            .create(CreateTodo::new("should_get_all_todos".to_string()))
+            .create(CreateTodo::new("should_get_all_todos".to_string(), labels))
             .await
             .expect("failed create todo");
         let req = build_todo_req_with_empty(Method::GET, "/todos");
@@ -193,8 +197,10 @@ mod test {
         let todo_repository = TodoRepositoryForMemory::new(vec![]);
         let label_repository = LabelRepositoryForMemory::new();
 
+        todo!("labelデータの追加");
+        let labels = vec![];
         todo_repository
-            .create(CreateTodo::new("before_update_todos".to_string()))
+            .create(CreateTodo::new("before_update_todos".to_string(), labels))
             .await
             .expect("failed create todo");
         let req = build_todo_req_with_json(
@@ -220,8 +226,10 @@ mod test {
         let todo_repository = TodoRepositoryForMemory::new(vec![]);
         let label_repository = LabelRepositoryForMemory::new();
 
+        todo!("labelデータの追加");
+        let labels = vec![];
         todo_repository
-            .create(CreateTodo::new("should_delete_todos".to_string()))
+            .create(CreateTodo::new("should_delete_todos".to_string(), labels))
             .await
             .expect("failed create todo");
         let req = build_todo_req_with_empty(Method::DELETE, "/todos/1");

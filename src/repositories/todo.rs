@@ -21,6 +21,13 @@ pub trait TodoRepository: Clone + Send + Sync + 'static {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, FromRow)]
+struct TodoFromRow {
+    id: i32,
+    text: String,
+    completed: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, FromRow)]
 pub struct TodoWithLabelFromRow {
     id: i32,
     text: String,
@@ -109,14 +116,26 @@ impl TodoRepositoryForDb {
 #[async_trait]
 impl TodoRepository for TodoRepositoryForDb {
     async fn create(&self, payload: CreateTodo) -> anyhow::Result<TodoEntity> {
-        let todo = sqlx::query_as::<_, TodoWithLabelFromRow>(
+        let tx = self.pool.begin().await?;
+        let row = sqlx::query_as::<_, TodoFromRow>(
             r#"INSERT INTO todos (text, completed) VALUES ($1, false) RETURNING *"#,
         )
         .bind(payload.text.clone())
         .fetch_one(&self.pool)
         .await?;
 
-        Ok(fold_entity(todo))
+        sqlx::query(
+            r#"INSERT INTO labels (todo_id, label_id) SELECT $1, id FROM UNNEST($2) AS t(id);"#,
+        )
+        .bind(row.id)
+        .bind(payload.labels)
+        .execute(&self.pool)
+        .await?;
+        tx.commit().await?;
+
+        let todo = self.find(row.id).await?;
+
+        Ok(todo)
     }
 
     async fn find(&self, id: i32) -> anyhow::Result<TodoEntity> {
