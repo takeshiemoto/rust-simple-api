@@ -1,12 +1,12 @@
-create table labels
+CREATE TABLE labels
 (
-    id   serial primary key,
-    name text not null
+    id   SERIAL PRIMARY KEY,
+    name TEXT NOT NULL
 );
 
-create table todo_labels
+CREATE TABLE todo_labels
 (
-    id       serial primary key,
-    todo_id  integer not null references todos (id) deferrable initially deferred,
-    label_id integer not null references labels (id) deferrable initially deferred
+    id       SERIAL PRIMARY KEY,
+    todo_id  INTEGER NOT NULL REFERENCES todos (id) DEFERRABLE INITIALLY DEFERRED,
+    label_id INTEGER NOT NULL REFERENCES labels (id) DEFERRABLE INITIALLY DEFERRED
 );

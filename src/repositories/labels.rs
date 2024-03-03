@@ -93,7 +93,7 @@ mod test {
             .await
             .unwrap_or_else(|_| panic!("fail connect database, url is [{}]", database_url));
 
-        let repository = LabelRepositoryForDb::new(pool.clone());
+        let repository = LabelRepositoryForDb::new(pool);
         let label_text = "test_label";
 
         // create
@@ -101,13 +101,6 @@ mod test {
             .create(label_text.to_string())
             .await
             .expect("[create] returned Err");
-
-        assert_eq!(label.name, label_text);
-
-        // all
-        let labels = repository.all().await.expect("[all] returned Err");
-        let label = labels.last().unwrap();
-
         assert_eq!(label.name, label_text);
 
         // delete

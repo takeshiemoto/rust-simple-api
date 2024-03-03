@@ -125,7 +125,7 @@ impl TodoRepository for TodoRepositoryForDb {
         .await?;
 
         sqlx::query(
-            r#"INSERT INTO labels (todo_id, label_id) SELECT $1, id FROM UNNEST($2) AS t(id);"#,
+            r#"INSERT INTO todo_labels (todo_id, label_id) SELECT $1, id FROM UNNEST($2) AS t(id);"#,
         )
         .bind(row.id)
         .bind(payload.labels)
@@ -317,16 +317,24 @@ mod test {
             .unwrap_or_else(|_| panic!("fail connect database, url is [{}]", database_url));
 
         let label_name = String::from("test label");
-        let optional_label = sqlx::query_as::<_, Label>(r#"select * from labels where name = $1"#)
-            .bind(label_name.clone())
-            .fetch_optional(&pool)
-            .await
-            .expect("Failed to prepare label data.");
+        let optional_label = sqlx::query_as::<_, Label>(
+            r#"
+select * from labels where name = $1
+        "#,
+        )
+        .bind(label_name.clone())
+        .fetch_optional(&pool)
+        .await
+        .expect("Failed to prepare label data.");
         let label_1 = if let Some(label) = optional_label {
             label
         } else {
             let label = sqlx::query_as::<_, Label>(
-                r#"insert into labels ( name ) values ( $1 ) returning *"#,
+                r#"
+insert into labels ( name )
+values ( $1 )
+returning *
+            "#,
             )
             .bind(label_name)
             .fetch_one(&pool)
@@ -334,6 +342,7 @@ mod test {
             .expect("Failed to insert label data.");
             label
         };
+
         let repository = TodoRepositoryForDb::new(pool.clone());
         let todo_text = "[crud_scenario] text";
 
@@ -342,7 +351,6 @@ mod test {
             .create(CreateTodo::new(todo_text.to_string(), vec![label_1.id]))
             .await
             .expect("[create] returned Err");
-
         assert_eq!(created.text, todo_text);
         assert!(!created.completed);
         assert_eq!(*created.labels.first().unwrap(), label_1);
@@ -352,13 +360,11 @@ mod test {
             .find(created.id)
             .await
             .expect("[find] returned Err");
-
         assert_eq!(created, todo);
 
         // all
         let todos = repository.all().await.expect("[all] returned Err");
         let todo = todos.first().unwrap();
-
         assert_eq!(created, *todo);
 
         // update
@@ -374,10 +380,9 @@ mod test {
             )
             .await
             .expect("[update] returned Err");
-
         assert_eq!(created.id, todo.id);
         assert_eq!(todo.text, updated_text);
-        assert!(todo.labels.len() == 0);
+        assert_eq!(todo.labels.len(), 0);
 
         // delete
         repository
@@ -385,16 +390,29 @@ mod test {
             .await
             .expect("[delete] returned Err");
         let res = repository.find(created.id).await;
-
         assert!(res.is_err());
 
-        let todo_rows = sqlx::query(r#"SELECT * FROM todos WHERE id=$1"#)
-            .bind(todo.id)
-            .fetch_all(&pool)
-            .await
-            .expect("[delete] todo_labels fetch error");
+        let todo_rows = sqlx::query(
+            r#"
+select * from todos where id=$1
+        "#,
+        )
+        .bind(todo.id)
+        .fetch_all(&pool)
+        .await
+        .expect("[delete] todo_labels fetch error");
+        assert_eq!(todo_rows.len(), 0);
 
-        assert_eq!(todo_rows.len(), 0)
+        let rows = sqlx::query(
+            r#"
+select * from todo_labels where todo_id=$1
+        "#,
+        )
+        .bind(todo.id)
+        .fetch_all(&pool)
+        .await
+        .expect("[delete] todo_labels fetch error");
+        assert_eq!(rows.len(), 0);
     }
 }
 
@@ -424,11 +442,11 @@ pub mod test_utils {
         }
     }
 
-    type TodoDates = HashMap<i32, TodoEntity>;
+    type TodoDatas = HashMap<i32, TodoEntity>;
 
     #[derive(Debug, Clone)]
     pub struct TodoRepositoryForMemory {
-        store: Arc<RwLock<TodoDates>>,
+        store: Arc<RwLock<TodoDatas>>,
         labels: Vec<Label>,
     }
 
@@ -440,13 +458,11 @@ pub mod test_utils {
             }
         }
 
-        // HashMapに対してスレッドセーフに書き込む
-        fn write_store_ref(&self) -> RwLockWriteGuard<TodoDates> {
+        fn write_store_ref(&self) -> RwLockWriteGuard<TodoDatas> {
             self.store.write().unwrap()
         }
 
-        // HashMapからスレッドセーフに読み込む
-        fn read_store_ref(&self) -> RwLockReadGuard<TodoDates> {
+        fn read_store_ref(&self) -> RwLockReadGuard<TodoDatas> {
             self.store.read().unwrap()
         }
 
@@ -527,7 +543,7 @@ pub mod test_utils {
                 id,
                 text: text.clone(),
                 completed: false,
-                labels,
+                labels: labels.clone(),
             };
 
             // create
@@ -564,13 +580,12 @@ pub mod test_utils {
                 )
                 .await
                 .expect("failed update todo.");
-
             assert_eq!(
                 TodoEntity {
                     id,
                     text,
                     completed: true,
-                    labels: vec![]
+                    labels: vec![],
                 },
                 todo
             );

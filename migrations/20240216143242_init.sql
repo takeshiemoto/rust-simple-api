@@ -1,7 +1,6 @@
--- Add migration script here
-create table todos
+CREATE TABLE todos
 (
-    id        serial primary key,
-    text      text    not null,
-    completed boolean not null default false
-)
+    id        SERIAL PRIMARY KEY,
+    text      TEXT    NOT NULL,
+    completed BOOLEAN NOT NULL DEFAULT false
+);
