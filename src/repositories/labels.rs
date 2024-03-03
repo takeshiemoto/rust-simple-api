@@ -121,6 +121,7 @@ mod test {
 #[cfg(test)]
 pub mod test_utils {
     use super::{Label, LabelRepository};
+    use crate::repositories::RepositoryError;
     use axum::async_trait;
     use std::collections::HashMap;
     use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -159,15 +160,27 @@ pub mod test_utils {
     #[async_trait]
     impl LabelRepository for LabelRepositoryForMemory {
         async fn create(&self, name: String) -> anyhow::Result<Label> {
-            todo!()
+            let mut store = self.write_store_ref();
+            if let Some((_key, label)) = store.iter().find(|(_key, label)| label.name == name) {
+                return Ok(label.clone());
+            };
+
+            let id = (store.len() + 1) as i32;
+            let label = Label::new(id, name.clone());
+            store.insert(id, label.clone());
+            Ok(label)
         }
 
         async fn all(&self) -> anyhow::Result<Vec<Label>> {
-            todo!()
+            let store = self.read_store_ref();
+            let labels = Vec::from_iter(store.values().cloned());
+            Ok(labels)
         }
 
         async fn delete(&self, id: i32) -> anyhow::Result<()> {
-            todo!()
+            let mut store = self.write_store_ref();
+            store.remove(&id).ok_or(RepositoryError::NotFound(id))?;
+            Ok(())
         }
     }
 
