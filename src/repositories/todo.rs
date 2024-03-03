@@ -139,31 +139,40 @@ impl TodoRepository for TodoRepositoryForDb {
     }
 
     async fn find(&self, id: i32) -> anyhow::Result<TodoEntity> {
-        let todo = sqlx::query_as::<_, TodoWithLabelFromRow>(r#"SELECT * FROM todos WHERE id=$1"#)
-            .bind(id)
-            .fetch_one(&self.pool)
-            .await
-            .map_err(|e| match e {
-                sqlx::Error::RowNotFound => RepositoryError::NotFound(id),
-                _ => RepositoryError::Unexpected(e.to_string()),
-            })?;
+        let items = sqlx::query_as::<_, TodoWithLabelFromRow>(
+            r#"SELECT todos.*, labels.id AS label_id, labels.name AS label_name FROM todos LEFT OUTER JOIN todo_labels tl ON todos.id = tl.todo_id LEFT OUTER JOIN labels ON labels.id = tl.label_id WHERE todos.id=$1"#,
+        )
+        .bind(id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| match e {
+            sqlx::Error::RowNotFound => RepositoryError::NotFound(id),
+            _ => RepositoryError::Unexpected(e.to_string()),
+        })?;
 
-        Ok(fold_entity(todo))
+        let todos = fold_entities(items);
+        let todo = todos.first().ok_or(RepositoryError::NotFound(id))?;
+        Ok(todo.clone())
     }
 
     async fn all(&self) -> anyhow::Result<Vec<TodoEntity>> {
-        let todos =
-            sqlx::query_as::<_, TodoWithLabelFromRow>(r#"SELECT * FROM todos ORDER BY id DESC;"#)
-                .fetch_all(&self.pool)
-                .await?;
+        let items = sqlx::query_as::<_, TodoWithLabelFromRow>(
+            r#"SELECT todos.*, labels.id AS label_id, labels.name AS label_name FROM todos LEFT OUTER JOIN todo_labels tl ON todos.id = tl.todo_id LEFT OUTER JOIN labels ON labels.id = tl.label_id ORDER BY todos.id DESC;"#
+        ).fetch_all(&self.pool).await?;
 
-        Ok(fold_entities(todos))
+        Ok(fold_entities(items))
     }
 
     async fn update(&self, id: i32, payload: UpdateTodo) -> anyhow::Result<TodoEntity> {
+        let tx = self.pool.begin().await?;
+
         let old_todo = self.find(id).await?;
-        let todo = sqlx::query_as::<_, TodoWithLabelFromRow>(
-            r#"UPDATE TODOS SET text=$1, completed=$2 WHERE id=$3 RETURNING *"#,
+        sqlx::query(
+            r#"
+update todos set text=$1, completed=$2
+where id=$3
+returning *
+        "#,
         )
         .bind(payload.text.unwrap_or(old_todo.text))
         .bind(payload.completed.unwrap_or(old_todo.completed))
@@ -171,18 +180,68 @@ impl TodoRepository for TodoRepositoryForDb {
         .fetch_one(&self.pool)
         .await?;
 
-        Ok(fold_entity(todo))
+        if let Some(labels) = payload.labels {
+            // todo's label update
+            // 一度関連するレコードを削除
+            sqlx::query(
+                r#"
+    delete from todo_labels where todo_id=$1
+            "#,
+            )
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+
+            sqlx::query(
+                r#"
+    insert into todo_labels (todo_id, label_id)
+    select $1, id
+    from unnest($2) as t(id);
+            "#,
+            )
+            .bind(id)
+            .bind(labels)
+            .execute(&self.pool)
+            .await?;
+        };
+
+        tx.commit().await?;
+        let todo = self.find(id).await?;
+        Ok(todo)
     }
 
     async fn delete(&self, id: i32) -> anyhow::Result<()> {
-        sqlx::query(r#"DELETE FROM todos WHERE id=$1"#)
-            .bind(id)
-            .execute(&self.pool)
-            .await
-            .map_err(|e| match e {
-                sqlx::Error::RowNotFound => RepositoryError::NotFound(id),
-                _ => RepositoryError::Unexpected(e.to_string()),
-            })?;
+        let tx = self.pool.begin().await?;
+
+        // todo's label delete
+        sqlx::query(
+            r#"
+delete from todo_labels where todo_id=$1
+        "#,
+        )
+        .bind(id)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| match e {
+            sqlx::Error::RowNotFound => RepositoryError::NotFound(id),
+            _ => RepositoryError::Unexpected(e.to_string()),
+        })?;
+
+        // todo delete
+        sqlx::query(
+            r#"
+delete from todos where id=$1
+        "#,
+        )
+        .bind(id)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| match e {
+            sqlx::Error::RowNotFound => RepositoryError::NotFound(id),
+            _ => RepositoryError::Unexpected(e.to_string()),
+        })?;
+
+        tx.commit().await?;
 
         Ok(())
     }
@@ -286,6 +345,7 @@ mod test {
 
         assert_eq!(created.text, todo_text);
         assert!(!created.completed);
+        assert_eq!(*created.labels.first().unwrap(), label_1);
 
         // find
         let todo = repository
@@ -317,6 +377,7 @@ mod test {
 
         assert_eq!(created.id, todo.id);
         assert_eq!(todo.text, updated_text);
+        assert!(todo.labels.len() == 0);
 
         // delete
         repository
