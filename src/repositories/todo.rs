@@ -432,12 +432,12 @@ pub mod test_utils {
     }
 
     impl TodoEntity {
-        pub fn new(id: i32, text: String) -> Self {
+        pub fn new(id: i32, text: String, labels: Vec<Label>) -> Self {
             Self {
                 id,
                 text,
                 completed: false,
-                labels: vec![],
+                labels,
             }
         }
     }
@@ -481,7 +481,8 @@ pub mod test_utils {
         async fn create(&self, payload: CreateTodo) -> anyhow::Result<TodoEntity> {
             let mut store = self.write_store_ref();
             let id = (store.len() + 1) as i32;
-            let todo = TodoEntity::new(id, payload.text.clone());
+            let labels = self.resolve_labels(payload.labels);
+            let todo = TodoEntity::new(id, payload.text.clone(), labels);
             store.insert(id, todo.clone());
             Ok(todo)
         }

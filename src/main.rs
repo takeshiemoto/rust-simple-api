@@ -78,6 +78,7 @@ fn create_app<Todo: TodoRepository, Label: LabelRepository>(
 mod test {
     use super::*;
     use crate::repositories::labels::test_utils::LabelRepositoryForMemory;
+    use crate::repositories::labels::Label;
     use crate::repositories::todo::test_utils::TodoRepositoryForMemory;
     use crate::repositories::todo::{CreateTodo, TodoEntity};
     use axum::http::{Method, StatusCode};
@@ -100,9 +101,21 @@ mod test {
         assert_eq!(body, "Hello, World!");
     }
 
+    fn label_fixture() -> (Vec<Label>, Vec<i32>) {
+        let id = 999;
+        (
+            vec![Label {
+                id,
+                name: String::from("test label"),
+            }],
+            vec![id],
+        )
+    }
+
     #[tokio::test]
     async fn should_created_todo() {
-        let expected = TodoEntity::new(1, "should_return_created_todo".to_string());
+        let (labels, _label_ids) = label_fixture();
+        let expected = TodoEntity::new(1, "should_return_created_todo".to_string(), labels.clone());
         let req = build_todo_req_with_json(
             "/todos",
             Method::POST,
@@ -110,7 +123,7 @@ mod test {
         );
         // oneshotは擬似リクエストを送る
         let res = create_app(
-            TodoRepositoryForMemory::new(vec![]),
+            TodoRepositoryForMemory::new(labels),
             LabelRepositoryForMemory::new(),
         )
         .oneshot(req)
@@ -147,13 +160,13 @@ mod test {
 
     #[tokio::test]
     async fn should_find_todo() {
-        let expected = TodoEntity::new(1, "Should_find_todo".to_string());
-        let todo_repository = TodoRepositoryForMemory::new(vec![]);
+        let (labels, label_ids) = label_fixture();
+        let expected = TodoEntity::new(1, "Should_find_todo".to_string(), labels.clone());
+        let todo_repository = TodoRepositoryForMemory::new(labels.clone());
         let label_repository = LabelRepositoryForMemory::new();
 
-        let labels = vec![];
         todo_repository
-            .create(CreateTodo::new("Should_find_todo".to_string(), labels))
+            .create(CreateTodo::new("Should_find_todo".to_string(), label_ids))
             .await
             .expect("failed create todo");
         let req = build_todo_req_with_empty(Method::GET, "/todos/1");
@@ -167,14 +180,17 @@ mod test {
 
     #[tokio::test]
     async fn should_get_all_todos() {
-        let expected = TodoEntity::new(1, "should_get_all_todos".to_string());
+        let (labels, label_ids) = label_fixture();
+        let expected = TodoEntity::new(1, "should_get_all_todos".to_string(), labels.clone());
 
-        let todo_repository = TodoRepositoryForMemory::new(vec![]);
+        let todo_repository = TodoRepositoryForMemory::new(labels.clone());
         let label_repository = LabelRepositoryForMemory::new();
 
-        let labels = vec![];
         todo_repository
-            .create(CreateTodo::new("should_get_all_todos".to_string(), labels))
+            .create(CreateTodo::new(
+                "should_get_all_todos".to_string(),
+                label_ids,
+            ))
             .await
             .expect("failed create todo");
         let req = build_todo_req_with_empty(Method::GET, "/todos");
@@ -191,13 +207,16 @@ mod test {
 
     #[tokio::test]
     async fn should_update_todo() {
-        let expected = TodoEntity::new(1, "before_update_todos".to_string());
-        let todo_repository = TodoRepositoryForMemory::new(vec![]);
+        let (labels, label_ids) = label_fixture();
+        let expected = TodoEntity::new(1, "before_update_todos".to_string(), labels.clone());
+        let todo_repository = TodoRepositoryForMemory::new(labels.clone());
         let label_repository = LabelRepositoryForMemory::new();
 
-        let labels = vec![];
         todo_repository
-            .create(CreateTodo::new("before_update_todos".to_string(), labels))
+            .create(CreateTodo::new(
+                "before_update_todos".to_string(),
+                label_ids,
+            ))
             .await
             .expect("failed create todo");
         let req = build_todo_req_with_json(
